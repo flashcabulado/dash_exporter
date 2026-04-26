@@ -218,46 +218,48 @@ class Transcript:
             return ""
         parts = []
         for row in msg.components:
-            if isinstance(row, discord.ActionRow):
-                row_parts = []
-                for comp in row.children:
-                    row_parts.append(self._render_component(comp))
+            children = getattr(row, "children", None)
+            if children is not None:
+                row_parts = [self._render_component(c) for c in children]
                 parts.append(f'<div class="comp-row">{"".join(row_parts)}</div>')
             else:
                 parts.append(self._render_component(row))
         return f'<div class="components">{"".join(parts)}</div>'
 
     def _render_component(self, comp) -> str:
-        if isinstance(comp, discord.Button):
+        comp_type = type(comp).__name__
+
+        if comp_type == "Button":
             label = html_mod.escape(comp.label or "")
             emoji = html_mod.escape(str(comp.emoji)) if comp.emoji else ""
             style_map = {
-                discord.ButtonStyle.primary:   "btn-primary",
-                discord.ButtonStyle.secondary: "btn-secondary",
-                discord.ButtonStyle.success:   "btn-success",
-                discord.ButtonStyle.danger:    "btn-danger",
-                discord.ButtonStyle.link:      "btn-link",
+                1: "btn-primary",
+                2: "btn-secondary",
+                3: "btn-success",
+                4: "btn-danger",
+                5: "btn-link",
             }
-            cls = style_map.get(comp.style, "btn-secondary")
-            disabled = ' disabled' if comp.disabled else ''
-            href = f' href="{comp.url}"' if comp.url else ""
-            tag  = "a" if comp.url else "button"
+            style_val = comp.style.value if hasattr(comp.style, "value") else 2
+            cls      = style_map.get(style_val, "btn-secondary")
+            disabled = " disabled" if comp.disabled else ""
+            href     = f' href="{comp.url}"' if getattr(comp, "url", None) else ""
+            tag      = "a" if getattr(comp, "url", None) else "button"
             return f'<{tag} class="comp-btn {cls}"{href}{disabled}>{emoji}{label}</{tag}>'
 
-        if isinstance(comp, (discord.Select, discord.UserSelect, discord.RoleSelect, discord.MentionableSelect, discord.ChannelSelect)):
-            ph = html_mod.escape(comp.placeholder or "Selecione uma opção")
+        if "Select" in comp_type:
+            ph   = html_mod.escape(getattr(comp, "placeholder", None) or "Selecione uma opção")
             opts = ""
-            if hasattr(comp, "options"):
-                for o in comp.options:
-                    em = html_mod.escape(str(o.emoji)) + " " if o.emoji else ""
-                    opts += f'<option>{em}{html_mod.escape(o.label)}</option>'
+            for o in getattr(comp, "options", []):
+                em   = html_mod.escape(str(o.emoji)) + " " if getattr(o, "emoji", None) else ""
+                opts += f"<option>{em}{html_mod.escape(o.label)}</option>"
             return f'<select class="comp-select" disabled><option>{ph}</option>{opts}</select>'
 
-        if isinstance(comp, discord.TextInput):
-            val = html_mod.escape(comp.value or comp.placeholder or "")
-            return f'<div class="comp-input"><label>{html_mod.escape(comp.label)}</label><div class="input-val">{val}</div></div>'
+        if comp_type == "TextInput":
+            val   = html_mod.escape(getattr(comp, "value", None) or getattr(comp, "placeholder", None) or "")
+            label = html_mod.escape(getattr(comp, "label", "") or "")
+            return f'<div class="comp-input"><label>{label}</label><div class="input-val">{val}</div></div>'
 
-        return f'<div class="comp-unknown">[componente]</div>'
+        return '<div class="comp-unknown">[componente]</div>'
 
     def _date_divider(self, dt) -> str:
         label = fmt_date(dt, self.tz_info)
